@@ -18,6 +18,7 @@ interface AnimationData {
     width: number;
     height: number;
   };
+  obstacles: [number, number][]; // Array of obstacle coordinates
 }
 
 interface AnimationProps {
@@ -44,7 +45,7 @@ const GridSquare: React.FC<{
   robotColors: { [key: string]: string };
 }> = ({ value, robotColors }) => {
   const getBackgroundColor = () => {
-    if (value === "X") return "bg-orange-500";
+    if (value === "X") return "bg-orange-500"; // Obstacles marked as orange
     if (value === ".") return "bg-gray-100";
     return robotColors[value] || "bg-gray-500";
   };
@@ -71,6 +72,7 @@ const Animation: React.FC<AnimationProps> = ({ animationData, error }) => {
   const gridWidth = animationData?.grid_dimensions.width || 0;
   const gridHeight = animationData?.grid_dimensions.height || 0;
   const timeLogLength = animationData?.time_log.length || 0;
+  const obstacles = animationData?.obstacles || [];
 
   useEffect(() => {
     if (animationData) {
@@ -114,32 +116,37 @@ const Animation: React.FC<AnimationProps> = ({ animationData, error }) => {
 
   const currentGrid = useMemo(() => {
     if (!animationData) return [];
+
+    // Initialize the grid
     const grid = Array(gridHeight)
       .fill(null)
       .map(() => Array(gridWidth).fill("."));
-    const positions = animationData.time_log[currentStep]?.positions;
 
+    // Place obstacles in the grid
+    obstacles.forEach(([x, y]) => {
+      if (x >= 0 && x < gridHeight && y >= 0 && y < gridWidth) {
+        grid[x][y] = "X"; // Marking obstacles with "X"
+      }
+    });
+
+    // Mark robot positions in the grid
+    const positions = animationData.time_log[currentStep]?.positions;
     if (positions) {
       Object.entries(positions).forEach(([robotId, [x, y]]) => {
         if (x >= 0 && x < gridHeight && y >= 0 && y < gridWidth) {
-          grid[x][y] = robotId;
+          grid[x][y] = robotId; // Mark robots by their ID
         }
       });
     }
 
     return grid;
-  }, [animationData, currentStep, gridWidth, gridHeight]);
+  }, [animationData, currentStep, gridWidth, gridHeight, obstacles]);
 
   if (error) {
     return (
       <Alert variant="destructive" className="mb-4">
         <AlertTitle>Error</AlertTitle>
-        <AlertDescription>
-          {error ===
-          "Deadlock detected: Some bots cannot reach their goals due to the configuration"
-            ? "Deadlock detected: Some bots cannot reach their goals due to the configuration"
-            : "No valid paths found for all bots"}
-        </AlertDescription>
+        <AlertDescription>{error}</AlertDescription>
       </Alert>
     );
   }
@@ -156,7 +163,7 @@ const Animation: React.FC<AnimationProps> = ({ animationData, error }) => {
   return (
     <div className="flex flex-col items-center p-8 space-y-8 bg-gray-950 text-white">
       <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-500 via-orange-400 to-orange-300 inline-block text-transparent bg-clip-text mb-6">
-        Multi-Robot Animation
+        Multi-Robot Animation with Obstacles
       </h1>
 
       <div
@@ -178,66 +185,25 @@ const Animation: React.FC<AnimationProps> = ({ animationData, error }) => {
         )}
       </div>
 
-      <div className="flex items-center space-x-4">
-        <Button onClick={() => goToStep(0)} disabled={currentStep === 0}>
-          <SkipBack size={24} />
+      <div className="flex space-x-4 items-center">
+        <Button onClick={togglePlayPause}>
+          {isPlaying ? <Pause /> : <Play />}
         </Button>
-        <Button
-          onClick={togglePlayPause}
-          className="bg-orange-500 text-white hover:bg-orange-600 transition duration-200"
-        >
-          {isPlaying ? <Pause size={24} /> : <Play size={24} />}
-        </Button>
-        <Button
-          onClick={() => goToStep(timeLogLength - 1)}
-          disabled={currentStep === timeLogLength - 1}
-        >
-          <SkipForward size={24} />
-        </Button>
-      </div>
-
-      <div className="w-64">
         <Slider
-          defaultValue={[1000]}
-          max={1900}
-          min={100}
+          defaultValue={[2000 - playbackSpeed]}
+          max={2000}
           step={100}
           onValueChange={handleSpeedChange}
         />
-        <div className="flex justify-between mt-2">
-          <span>Slow</span>
-          <span>Fast</span>
-        </div>
       </div>
 
-      <div className="text-center mt-4">
-        <p className="text-xl font-semibold">
-          {animationData.time_log[currentStep]?.timestamp || "No data"}
-        </p>
-        <p>
-          Step: {currentStep + 1} / {timeLogLength}
-        </p>
-      </div>
-
-      <div className="mt-4 text-left">
-        <h2 className="text-2xl font-semibold mb-2">Movement Stats</h2>
-        <p>
-          Average Movements:{" "}
-          {animationData.movement_stats.average_movements.toFixed(2)}
-        </p>
-        <p>Max Movements: {animationData.movement_stats.max_movements}</p>
-        <h3 className="text-xl font-semibold mt-2 mb-1">
-          Total Movements per Robot:
-        </h3>
-        <ul>
-          {Object.entries(animationData.movement_stats.total_movements).map(
-            ([robotId, movements]) => (
-              <li key={robotId}>
-                Robot {robotId}: {movements} movements
-              </li>
-            )
-          )}
-        </ul>
+      <div className="flex space-x-4">
+        <Button onClick={() => goToStep(0)}>
+          <SkipBack />
+        </Button>
+        <Button onClick={() => goToStep(timeLogLength - 1)}>
+          <SkipForward />
+        </Button>
       </div>
     </div>
   );

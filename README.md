@@ -1,9 +1,9 @@
 <div align="center">
 <br/>
 
-![DoseHack Logo](https://example.com/dosehack-logo.png)
+<img src="https://lirp.cdn-website.com/445da6b2/dms3rep/multi/opt/DosePacker+and+DosePack+loogs-1-01-1920w.png" alt="DoseHack Logo" width="50"/>
 
-# AutoBotNavigator: Multi-Agent Path Planning in Warehouse Environments
+# DoseHack: Team Zeros and Ones
 
 </div>
 
@@ -188,8 +188,8 @@ These instructions will get you a copy of the project up and running on your loc
 1. Clone the repository
 
    ```
-   git clone https://github.com/ZerosAndOnes/AutoBotNavigator.git
-   cd AutoBotNavigator
+   git clone https://github.com/prodigyRahul/Zeros_and_ones.git
+   cd Zeros_and_ones
    ```
 
 2. Set up a virtual environment (optional but recommended)
@@ -259,9 +259,9 @@ This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md
 
 Team Zeros and Ones:
 
-- [Team Member 1] - Role - [GitHub Profile]
-- [Team Member 2] - Role - [GitHub Profile]
-- [Team Member 3] - Role - [GitHub Profile]
+- Rahul Mistry - Full Stack Developer
+- Ronit Kothari - ML Engineer
+- Abhishek Parmar - ML Engineer
 
 ## 🙏 Acknowledgements
 
@@ -271,7 +271,7 @@ Team Zeros and Ones:
 
 ## 📞 Contact
 
-For support or queries, please email us at [your-email@example.com]
+For support or queries, please email us at [rahulmistry.sde@gmail.com]
 
 ## 🔮 Future Roadmap
 
