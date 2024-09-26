@@ -1,8 +1,7 @@
-
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import heapq
 from typing import List, Tuple, Dict, Set
+import heapq
 
 app = Flask(__name__)
 CORS(app)
@@ -20,10 +19,6 @@ class Node:
 
 def heuristic(a: Tuple[int, int], b: Tuple[int, int]) -> int:
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
-
-@app.errorhandler(IndexError)
-def handle_index_error(error):
-    return jsonify({'error': 'An operation could not be completed because an index is out of range. Please check your input data.'}), 422
 
 def get_neighbors(grid: List[List[str]], node: Node, occupied_positions: Set[Tuple[int, int]]) -> List[Node]:
     neighbors = []
@@ -68,7 +63,7 @@ def a_star(grid: List[List[str]], start: Tuple[int, int], goal: Tuple[int, int],
 
     return []  # Return empty path if no solution found within max_iterations
 
-def find_paths(grid: List[List[str]]) -> Tuple[Dict[str, List[Tuple[int, int]]], str]:
+def detect_deadlock(grid: List[List[str]]) -> bool:
     starts = {}
     goals = {}
     for i in range(len(grid)):
@@ -76,63 +71,85 @@ def find_paths(grid: List[List[str]]) -> Tuple[Dict[str, List[Tuple[int, int]]],
             if grid[i][j].startswith('A'):
                 starts[grid[i][j]] = (i, j)
             elif grid[i][j].startswith('B'):
-                goals[grid[i][j]] = (i, j)
+                goals[grid[i][j].replace('B', 'A')] = (i, j)
+
+    # Check if any bot's path to its goal is blocked by another bot's goal
+    for bot, start in starts.items():
+        goal = goals[bot]
+        other_goals = set(goals.values()) - {goal}
+        other_starts = set(starts.values()) - {start}
+        blocked_positions = other_goals.union(other_starts)
+        path = a_star(grid, start, goal, blocked_positions)
+        if not path:
+            return True  # Deadlock detected
+
+    return False
+
+def find_paths(grid: List[List[str]]) -> Dict[str, List[Tuple[int, int]]]:
+    starts = {}
+    goals = {}
+    for i in range(len(grid)):
+        for j in range(len(grid[0])):
+            if grid[i][j].startswith('A'):
+                starts[grid[i][j]] = (i, j)
+            elif grid[i][j].startswith('B'):
+                goals[grid[i][j].replace('B', 'A')] = (i, j)
 
     paths = {}
     occupied_positions = set()
     for bot, start in starts.items():
-        goal = goals[bot.replace('A', 'B')]
+        goal = goals[bot]
         path = a_star(grid, start, goal, occupied_positions)
         if not path:
-            return None, bot  # Return None and the bot for which no path was found
+            return None  # Return None if no path found for any bot
         paths[bot] = path
         occupied_positions.add(goal)
 
-    return paths, None  # Return paths and None if all paths were found successfully
+    return paths
 
-def detect_deadlock(stuck_count: Dict[str, int], threshold: int = 5) -> bool:
-    return any(stuck >= threshold for stuck in stuck_count.values())
+@app.route('/move_bots', methods=['POST'])
+def move_bots():
+    data = request.json
+    grid = data.get('grid')
 
-def avoid_collisions(paths: Dict[str, List[Tuple[int, int]]], grid: List[List[str]], max_iterations: int = 1000) -> Tuple[Dict[str, List[Tuple[int, int]]], bool]:
+    if not grid:
+        return jsonify({'error': 'Grid data is required'}), 400
+
+    # Check for deadlock
+    if detect_deadlock(grid):
+        return jsonify({'error': 'Deadlock detected: Some bots cannot reach their goals due to the configuration'}), 422
+
+    paths = find_paths(grid)
+    if paths is None:
+        return jsonify({'error': 'No valid paths found for all bots'}), 422
+
+    # Generate time log and movement stats
+    time_log = generate_time_log(paths)
+    movement_stats = calculate_movement_stats(paths)
+
+    final_result = {
+        'time_log': time_log,
+        'movement_stats': movement_stats,
+        'grid_dimensions': {
+            'width': len(grid[0]),
+            'height': len(grid)
+        }
+    }
+
+    return jsonify(final_result), 200
+
+def generate_time_log(paths: Dict[str, List[Tuple[int, int]]]) -> List[Dict[str, any]]:
     max_length = max(len(path) for path in paths.values())
-    collision_free_paths = {bot: list(path) for bot, path in paths.items()}
-    occupied_positions = {}
-    last_positions = {bot: path[0] for bot, path in collision_free_paths.items()}
-    stuck_count = {bot: 0 for bot in collision_free_paths.keys()}
+    time_log = []
 
-    deadlock_detected = False
+    for t in range(max_length):
+        positions = {bot: path[min(t, len(path)-1)] for bot, path in paths.items()}
+        time_log.append({
+            "timestamp": str(t),
+            "positions": positions
+        })
 
-    for t in range(max_iterations):
-        if all(t >= len(path) for path in collision_free_paths.values()):
-            break
-
-        current_positions = {}
-        for bot, path in collision_free_paths.items():
-            if t < len(path):
-                intended_pos = path[t]
-                current_pos = last_positions[bot]
-
-                if (intended_pos in current_positions.values() or
-                    (intended_pos in occupied_positions and occupied_positions[intended_pos] in current_positions)):
-                    current_positions[bot] = current_pos
-                    collision_free_paths[bot].insert(t, current_pos)
-                    stuck_count[bot] += 1
-                else:
-                    current_positions[bot] = intended_pos
-                    stuck_count[bot] = 0
-
-                last_positions[bot] = current_positions[bot]
-
-        if detect_deadlock(stuck_count):
-            deadlock_detected = True
-            break
-
-        occupied_positions = current_positions
-
-        if t == max_iterations - 1:
-            deadlock_detected = True
-
-    return collision_free_paths, deadlock_detected
+    return time_log
 
 def calculate_movement_stats(paths: Dict[str, List[Tuple[int, int]]]) -> Dict[str, any]:
     total_movements = {bot: len(path) - 1 for bot, path in paths.items()}
@@ -144,70 +161,6 @@ def calculate_movement_stats(paths: Dict[str, List[Tuple[int, int]]]) -> Dict[st
         "average_movements": avg_movements,
         "max_movements": max_movements
     }
-
-def generate_time_log(paths: Dict[str, List[Tuple[int, int]]], grid: List[List[str]]) -> List[Dict[str, any]]:
-    max_length = max(len(path) for path in paths.values())
-    time_log = []
-    bot_positions = {bot: path[0] for bot, path in paths.items()}
-    grid_height, grid_width = len(grid), len(grid[0])
-
-    for t in range(max_length):
-        current_grid = [row[:] for row in grid]
-        placed_bots = set()
-        
-        for bot, path in paths.items():
-            if t < len(path):
-                new_pos = path[t]
-                if new_pos != bot_positions[bot]:
-                    bot_positions[bot] = new_pos
-            
-            x, y = bot_positions[bot]
-            if bot not in placed_bots and (current_grid[x][y] == '.' or current_grid[x][y].startswith('B')):
-                current_grid[x][y] = bot
-                placed_bots.add(bot)
-        
-        # Replace 'B' goals with '.' if they're not occupied by bots
-        for i in range(grid_height):
-            for j in range(grid_width):
-                if current_grid[i][j].startswith('B') and current_grid[i][j] not in placed_bots:
-                    current_grid[i][j] = '.'
-        
-        time_log.append({
-            "timestamp": f"{t}",
-            "grid": current_grid
-        })
-
-    return time_log
-
-@app.route('/move_bots', methods=['POST'])
-def move_bots():
-    data = request.json
-    grid = data.get('grid')
-
-    if not grid:
-        return jsonify({'error': 'Grid data is required'}), 400
-
-    paths, invalid_bot = find_paths(grid)
-    if paths is None:
-        return jsonify({'error': f'Impossible scenario detected: No valid path found for bot {invalid_bot}'}), 422
-
-    safe_paths, deadlock_detected = avoid_collisions(paths, grid)
-    if deadlock_detected:
-        return jsonify({'error': 'Deadlock detected: Bots are unable to reach their destinations without collisions'}), 422
-
-    result = generate_time_log(safe_paths, grid)
-    movement_stats = calculate_movement_stats(safe_paths)
-    
-    final_result = {
-        'time_log': result,
-        'movement_stats': movement_stats,
-        'grid_dimensions': {
-            'width': len(grid[0]),
-            'height': len(grid)
-        }
-    }
-
-    return jsonify(final_result), 200
 
 if __name__ == '__main__':
     app.run(debug=True)
