@@ -205,9 +205,7 @@ export default function AdvancedRobotGridSetup() {
       setAnimationData(data);
     } catch (error) {
       console.error("Error submitting the grid:", error);
-      alert(
-        "An error occurred while submitting the grid. Please check the console for more details."
-      );
+      alert("Impossible Scenarios - Please try again later.");
     }
   };
 

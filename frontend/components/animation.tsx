@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { motion } from "framer-motion";
 
 interface AnimationData {
   movement_stats: {
@@ -160,6 +161,10 @@ const Animation: React.FC<AnimationProps> = ({ animationData, error }) => {
     );
   }
 
+  // Movement statistics from animation data
+  const { average_movements, max_movements, total_movements } =
+    animationData.movement_stats;
+
   return (
     <div className="flex flex-col items-center p-8 space-y-8 bg-gray-950 text-white">
       <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-500 via-orange-400 to-orange-300 inline-block text-transparent bg-clip-text mb-6">
@@ -205,6 +210,26 @@ const Animation: React.FC<AnimationProps> = ({ animationData, error }) => {
           <SkipForward />
         </Button>
       </div>
+
+      {/* Animated Movement Stats Display */}
+      <motion.div
+        className="mt-8 p-4 rounded-lg bg-gray-800"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <h2 className="text-2xl font-semibold mb-2">Movement Statistics</h2>
+        <p>Average Movements: {average_movements}</p>
+        <p>Max Movements: {max_movements}</p>
+        <h3 className="font-semibold mt-4">Total Movements:</h3>
+        <ul>
+          {Object.entries(total_movements).map(([key, value]) => (
+            <li key={key}>
+              {key}: {value}
+            </li>
+          ))}
+        </ul>
+      </motion.div>
     </div>
   );
 };
