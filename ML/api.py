@@ -126,6 +126,7 @@ def move_bots():
     # Generate time log and movement stats
     time_log = generate_time_log(paths)
     movement_stats = calculate_movement_stats(paths)
+    obstacles = get_obstacles(grid)
 
     final_result = {
         'time_log': time_log,
@@ -133,10 +134,19 @@ def move_bots():
         'grid_dimensions': {
             'width': len(grid[0]),
             'height': len(grid)
-        }
+        },
+        'obstacles': obstacles
     }
 
     return jsonify(final_result), 200
+
+def get_obstacles(grid: List[List[str]]) -> List[Tuple[int, int]]:
+    obstacles = []
+    for i in range(len(grid)):
+        for j in range(len(grid[0])):
+            if grid[i][j] == 'X':
+                obstacles.append((i, j))
+    return obstacles
 
 def generate_time_log(paths: Dict[str, List[Tuple[int, int]]]) -> List[Dict[str, any]]:
     max_length = max(len(path) for path in paths.values())

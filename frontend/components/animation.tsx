@@ -11,7 +11,7 @@ interface AnimationData {
     total_movements: { [key: string]: number };
   };
   time_log: {
-    grid: string[][];
+    positions: { [key: string]: [number, number] };
     timestamp: string;
   }[];
   grid_dimensions: {
@@ -21,29 +21,19 @@ interface AnimationData {
 }
 
 interface AnimationProps {
-  animationData: AnimationData;
+  animationData: AnimationData | null;
+  error: string | null;
 }
 
-// Utility to generate random color for each robot
 const generateRandomColor = () => {
-  const letters = "0123456789ABCDEF";
-  let color = "#";
-  for (let i = 0; i < 6; i++) {
-    color += letters[Math.floor(Math.random() * 16)];
-  }
-  return color;
+  return `#${Math.floor(Math.random() * 16777215).toString(16)}`;
 };
 
-// Utility to track robots across the entire animation, not just the first frame
-const getAllRobots = (timeLog: { grid: string[][] }[]) => {
+const getAllRobots = (timeLog: AnimationData["time_log"]) => {
   const robotSet = new Set<string>();
-  timeLog.forEach(({ grid }) => {
-    grid.forEach((row) => {
-      row.forEach((cell) => {
-        if (cell !== "X" && cell !== ".") {
-          robotSet.add(cell);
-        }
-      });
+  timeLog.forEach(({ positions }) => {
+    Object.keys(positions).forEach((robotId) => {
+      robotSet.add(robotId);
     });
   });
   return Array.from(robotSet);
@@ -56,7 +46,7 @@ const GridSquare: React.FC<{
   const getBackgroundColor = () => {
     if (value === "X") return "bg-orange-500";
     if (value === ".") return "bg-gray-100";
-    return robotColors[value] || "bg-gray-500"; // Use assigned robot color
+    return robotColors[value] || "bg-gray-500";
   };
 
   return (
@@ -66,31 +56,35 @@ const GridSquare: React.FC<{
       {value === "X" ? (
         <span className="text-white font-bold">X</span>
       ) : value !== "." ? (
-        <span className="text-white font-bold">{value}</span> // Display robot ID
+        <span className="text-white font-bold">{value}</span>
       ) : null}
     </div>
   );
 };
 
-const Animation: React.FC<AnimationProps> = ({ animationData }) => {
+const Animation: React.FC<AnimationProps> = ({ animationData, error }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1000);
-  const [error, setError] = useState<string | null>(null);
   const [robotColors, setRobotColors] = useState<{ [key: string]: string }>({});
 
-  const { width: gridWidth, height: gridHeight } =
-    animationData.grid_dimensions;
-  const timeLogLength = animationData.time_log.length;
+  const gridWidth = animationData?.grid_dimensions.width || 0;
+  const gridHeight = animationData?.grid_dimensions.height || 0;
+  const timeLogLength = animationData?.time_log.length || 0;
 
-  // Assign consistent colors to each robot based on their ID and ensure tracking of all robots
   useEffect(() => {
-    const robots = getAllRobots(animationData.time_log);
-    const colors: { [key: string]: string } = {};
-    robots.forEach((robot) => {
-      colors[robot] = generateRandomColor();
-    });
-    setRobotColors(colors);
+    if (animationData) {
+      try {
+        const robots = getAllRobots(animationData.time_log);
+        const colors: { [key: string]: string } = {};
+        robots.forEach((robot) => {
+          colors[robot] = generateRandomColor();
+        });
+        setRobotColors(colors);
+      } catch (err) {
+        console.error("Error initializing robot colors", err);
+      }
+    }
   }, [animationData]);
 
   const goToNextStep = useCallback(() => {
@@ -115,18 +109,46 @@ const Animation: React.FC<AnimationProps> = ({ animationData }) => {
   };
 
   const handleSpeedChange = (newSpeed: number[]) => {
-    setPlaybackSpeed(2000 - newSpeed[0]); // Invert the scale
+    setPlaybackSpeed(2000 - newSpeed[0]);
   };
 
   const currentGrid = useMemo(() => {
-    return animationData.time_log[currentStep]?.grid || [];
-  }, [animationData.time_log, currentStep]);
+    if (!animationData) return [];
+    const grid = Array(gridHeight)
+      .fill(null)
+      .map(() => Array(gridWidth).fill("."));
+    const positions = animationData.time_log[currentStep]?.positions;
+
+    if (positions) {
+      Object.entries(positions).forEach(([robotId, [x, y]]) => {
+        if (x >= 0 && x < gridHeight && y >= 0 && y < gridWidth) {
+          grid[x][y] = robotId;
+        }
+      });
+    }
+
+    return grid;
+  }, [animationData, currentStep, gridWidth, gridHeight]);
 
   if (error) {
     return (
       <Alert variant="destructive" className="mb-4">
         <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
+        <AlertDescription>
+          {error ===
+          "Deadlock detected: Some bots cannot reach their goals due to the configuration"
+            ? "Deadlock detected: Some bots cannot reach their goals due to the configuration"
+            : "No valid paths found for all bots"}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!animationData) {
+    return (
+      <Alert variant="destructive" className="mb-4">
+        <AlertTitle>Error</AlertTitle>
+        <AlertDescription>No animation data available</AlertDescription>
       </Alert>
     );
   }
@@ -160,7 +182,10 @@ const Animation: React.FC<AnimationProps> = ({ animationData }) => {
         <Button onClick={() => goToStep(0)} disabled={currentStep === 0}>
           <SkipBack size={24} />
         </Button>
-        <Button onClick={togglePlayPause}>
+        <Button
+          onClick={togglePlayPause}
+          className="bg-orange-500 text-white hover:bg-orange-600 transition duration-200"
+        >
           {isPlaying ? <Pause size={24} /> : <Play size={24} />}
         </Button>
         <Button
